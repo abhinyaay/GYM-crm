@@ -1,0 +1,152 @@
+# Complete local environment: `make up` (or `./scripts/generate-env.sh && docker compose up -d --build`)
+name: gymops
+
+x-logging: &default-logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gymops}
+      POSTGRES_USER: ${POSTGRES_USER:-gymops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD:?set ANALYTICS_DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports: ["127.0.0.1:5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *default-logging
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}",
+              "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" --no-auth-warning ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports: ["127.0.0.1:6379:6379"]
+    logging: *default-logging
+
+  core-service:
+    build: ./core-service
+    image: gymops-core:${IMAGE_TAG:-local}
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-gymops}
+      DB_USERNAME: ${POSTGRES_USER:-gymops}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      ANALYTICS_BASE_URL: http://analytics-service:8000
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      DEMO_DATA_ENABLED: ${DEMO_DATA_ENABLED:-false}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-}
+      BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Asia/Kolkata}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      PAYMENT_GATEWAY: ${PAYMENT_GATEWAY:-simulated}
+      SIMULATED_GATEWAY_SECRET: ${SIMULATED_GATEWAY_SECRET:-}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      ACCESS_MASTER_KEY: ${ACCESS_MASTER_KEY:-}
+      # e-mail: real SMTP to the local Mailpit inbox (http://localhost:8025) unless overridden in .env
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_STARTTLS_REQUIRED: ${SMTP_STARTTLS_REQUIRED:-false}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-no-reply@gymops.local}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-GymOps}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
+      UNSUBSCRIBE_TOKEN_SECRET: ${UNSUBSCRIBE_TOKEN_SECRET:-}
+      # SMS: log (default) | twilio | msg91
+      SMS_PROVIDER: ${SMS_PROVIDER:-log}
+      SMS_DEFAULT_COUNTRY_CODE: ${SMS_DEFAULT_COUNTRY_CODE:-91}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      TWILIO_MESSAGING_SERVICE_SID: ${TWILIO_MESSAGING_SERVICE_SID:-}
+      MSG91_AUTH_KEY: ${MSG91_AUTH_KEY:-}
+      MSG91_SENDER_ID: ${MSG91_SENDER_ID:-}
+      MSG91_TEMPLATE_ID: ${MSG91_TEMPLATE_ID:-}
+      MSG91_DLT_TEMPLATE_ID: ${MSG91_DLT_TEMPLATE_ID:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      mailpit: { condition: service_started }
+    ports: ["127.0.0.1:${CORE_HOST_PORT:-8081}:8080"]   # debugging only; clients go through nginx
+    deploy:
+      resources:
+        limits: { memory: 768m }
+    logging: *default-logging
+
+  # Local e-mail inbox: every e-mail core-service sends lands here (web UI http://localhost:8025).
+  # SMTP (1025) is reachable only on the compose network.
+  mailpit:
+    image: axllent/mailpit:v1.21.8
+    environment:
+      MP_MAX_MESSAGES: "5000"
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"         # no credentials needed (any are accepted)
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    ports: ["127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"]
+    deploy:
+      resources:
+        limits: { memory: 128m }
+    logging: *default-logging
+
+  analytics-service:
+    build: ./analytics-service
+    image: gymops-analytics:${IMAGE_TAG:-local}
+    environment:
+      DATABASE_URL: postgresql+psycopg://gym_analytics_ro:${ANALYTICS_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-gymops}
+      JWT_SECRET: ${JWT_SECRET}
+      BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Asia/Kolkata}
+      CACHE_TTL_SECONDS: "300"
+    depends_on:
+      core-service: { condition: service_healthy }   # schema + grants are created by core's Flyway migrations
+    ports: ["127.0.0.1:${ANALYTICS_HOST_PORT:-8001}:8000"]
+    deploy:
+      resources:
+        limits: { memory: 512m }
+    logging: *default-logging
+
+  web:
+    build: ./frontend
+    image: gymops-web:${IMAGE_TAG:-local}
+    deploy:
+      resources:
+        limits: { memory: 64m }
+    logging: *default-logging
+
+  nginx:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports: ["${HTTP_PORT:-80}:80"]
+    depends_on:
+      core-service: { condition: service_healthy }
+      analytics-service: { condition: service_healthy }
+      web: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging: *default-logging
+
+volumes:
+  pgdata:

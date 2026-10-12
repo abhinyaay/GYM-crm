@@ -1,0 +1,283 @@
+# All secrets come from environment variables; nothing sensitive has a default.
+spring:
+  application:
+    name: gymops-core
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/gymops}
+    username: ${DB_USERNAME:gymops}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      minimum-idle: 5
+      connection-timeout: 5000
+      max-lifetime: 1800000
+      pool-name: gymops-core
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate          # schema is owned by Flyway migrations
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+        default_batch_fetch_size: 50
+        query:
+          fail_on_pagination_over_collection_fetch: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL:false}
+      timeout: 500ms
+      connect-timeout: 1s
+  cache:
+    type: redis
+  jackson:
+    default-property-inclusion: always
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+  mvc:
+    problemdetails:
+      enabled: false
+  # SMTP for app.notifications.email-provider=smtp. Credentials only from the environment (Secrets Manager in AWS).
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      "[mail.smtp.starttls.enable]": ${SMTP_STARTTLS:true}            # upgrade when the server offers it
+      "[mail.smtp.starttls.required]": ${SMTP_STARTTLS_REQUIRED:false}
+      "[mail.smtp.ssl.enable]": ${SMTP_SSL:false}                     # implicit TLS (port 465)
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 10000
+      "[mail.smtp.writetimeout]": 10000
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: native   # trust X-Forwarded-* from Nginx / ALB for client IP & scheme
+  error:
+    include-message: never
+    include-stacktrace: never
+  tomcat:
+    remoteip:
+      internal-proxies: '10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}|127\.0\.0\.1'
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+      group:
+        # Redis and the analytics service are optional: their failure must not take instances out of the LB.
+        readiness:
+          include: readinessState,db
+        liveness:
+          include: livenessState
+  health:
+    redis:
+      enabled: true
+    mail:
+      enabled: false        # an unreachable SMTP server must never mark the app DOWN (the outbox retries)
+  metrics:
+    tags:
+      application: gymops-core
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: gymops-core
+    version: '@project.version@'
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      analytics:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 2
+        register-health-indicator: false
+
+app:
+  business-timezone: ${BUSINESS_TIMEZONE:Asia/Kolkata}
+  currency: INR
+  security:
+    jwt:
+      secret: ${JWT_SECRET}
+      issuer: ${JWT_ISSUER:gymops-core}
+      audience: gymops-api
+      access-token-ttl: ${JWT_ACCESS_TTL:15m}
+      refresh-token-ttl: ${JWT_REFRESH_TTL:14d}
+    max-failed-logins: 5
+    lockout-duration: 15m
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    auth-requests-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:20}
+  billing:
+    tax-rate: ${TAX_RATE:0.18}          # GST
+    invoice-due-days: 7
+    pending-payment-expiry-days: 7
+  attendance:
+    auto-checkout-after: 12h
+    assumed-visit-duration: 90m
+    milestone-every: 25
+  subscription:
+    renewal-reminder-days: 7
+    expiry-warning-days: 1
+  complaints:
+    sla-critical: 4h
+    sla-high: 24h
+    sla-medium: 72h
+    sla-low: 168h
+  notifications:
+    dispatch-batch-size: 100
+    max-attempts: 5
+    # log (default; logs a masked address) or smtp (spring.mail.* above: Mailpit locally, SES / SendGrid / Gmail SMTP in prod)
+    email-provider: ${EMAIL_PROVIDER:log}
+    public-base-url: ${PUBLIC_BASE_URL:http://localhost:3000}   # web app URL for preference / unsubscribe links
+    unsubscribe-secret: ${UNSUBSCRIBE_TOKEN_SECRET:}            # optional; derived from JWT_SECRET when blank
+    email:
+      from-address: ${MAIL_FROM_ADDRESS:no-reply@gymops.local}
+      from-name: ${MAIL_FROM_NAME:GymOps}
+      reply-to: ${MAIL_REPLY_TO:}
+      brand-color: "#1c7ed6"
+    sms:
+      enabled: ${SMS_ENABLED:true}
+      provider: ${SMS_PROVIDER:log}                     # log | twilio | msg91
+      default-country-code: ${SMS_DEFAULT_COUNTRY_CODE:91}
+      max-length: 459                                   # 3 GSM-7 segments
+      twilio:
+        account-sid: ${TWILIO_ACCOUNT_SID:}
+        auth-token: ${TWILIO_AUTH_TOKEN:}
+        from-number: ${TWILIO_FROM_NUMBER:}
+        messaging-service-sid: ${TWILIO_MESSAGING_SERVICE_SID:}
+      msg91:
+        auth-key: ${MSG91_AUTH_KEY:}
+        sender-id: ${MSG91_SENDER_ID:}
+        template-id: ${MSG91_TEMPLATE_ID:}
+        dlt-template-id: ${MSG91_DLT_TEMPLATE_ID:}
+    quiet-hours:                                        # promotional SMS only (TRAI): held back 21:00-09:00 business time
+      start-hour: 21
+      end-hour: 9
+  payments:
+    # simulated (default; deterministic, no network) or razorpay (needs the three RAZORPAY_* secrets)
+    gateway: ${PAYMENT_GATEWAY:simulated}
+    simulated-secret: ${SIMULATED_GATEWAY_SECRET:}
+    razorpay:
+      key-id: ${RAZORPAY_KEY_ID:}
+      key-secret: ${RAZORPAY_KEY_SECRET:}
+      webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
+      base-url: ${RAZORPAY_BASE_URL:https://api.razorpay.com/v1}
+      business-name: ${RAZORPAY_BUSINESS_NAME:GymOps}
+    mandate-max-amount: 50000.00     # largest single auto-debit a member authorises (INR)
+    emi-min-amount: 3000.00           # card EMI is offered only on invoices of at least this amount
+    emi-tenures: [3, 6, 9, 12]
+    checkout-expiry: 30m
+    autopay:
+      lead-days: 3                    # renewal invoice raised this many days before the term ends
+      pre-debit-notice: 24h           # RBI e-mandate rule: notify at least 24h before each debit
+      retry-delays-days: [1, 2, 3]    # dunning: retries after a failed debit, then autopay is switched off
+      cron: "0 15 * * * *"            # hourly
+  analytics:
+    base-url: ${ANALYTICS_BASE_URL:http://localhost:8000}
+    connect-timeout: 500ms
+    read-timeout: 3s
+  bootstrap:
+    admin-email: ${BOOTSTRAP_ADMIN_EMAIL:}
+    admin-password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+    demo-data: ${DEMO_DATA_ENABLED:false}
+    demo-password: ${DEMO_USER_PASSWORD:}
+  jobs:
+    subscription-lifecycle-cron: ${SUBSCRIPTION_LIFECYCLE_CRON:0 5 0 * * *}
+  leads:
+    trial-ending-notice-days: 1      # remind the member / raise a call task this many days before the trial's last day
+    stale-trial-days: 7              # days after a trial ended without conversion before a "call to convert" task
+    follow-up-hour: 10               # local hour at which auto-created follow-up tasks fall due
+    follow-up-digest-cron: ${LEADS_FOLLOW_UP_DIGEST_CRON:0 0 8 * * *}
+    trial-jobs-cron: ${LEADS_TRIAL_JOBS_CRON:0 30 8 * * *}
+  classes:
+    no-show-threshold: 3            # no-shows within the window that block booking
+    no-show-window: 30d
+    no-show-block: 7d
+    reconcile-after: 30m            # classes are completed/reconciled this long after they end
+    reconcile-open-visit-window: 4h # an open gym visit counts for a class only if it began this long before it
+    reminder-lead-time: 2h
+    max-series-weeks: 26
+    job-cron: ${CLASS_JOBS_CRON:0 */15 * * * *}
+  # ---- module blocks below are owned by their modules; extend in place ----
+  access:
+    enabled: true
+    # Derives every gate device secret and the QR pass key. Required (32+ chars) under the prod profile;
+    # other profiles fall back to a built-in development key with a warning.
+    master-key: ${ACCESS_MASTER_KEY:}
+    clock-skew: 5m                    # max |device X-Timestamp - server time|
+    nonce-ttl: 15m                    # device nonces are single-use for at least this long (> 2 x clock-skew)
+    qr-window: 30s                    # rotating QR pass: one token per window
+    qr-window-tolerance: 1            # +/- windows accepted at the gate
+    anti-passback: ${ACCESS_ANTI_PASSBACK:HARD}   # HARD = deny, SOFT = open + flag + repair the visit
+    offline-allowlist-hours: 24       # validity of the signed offline allowlist
+    heartbeat-timeout: 5m             # silent longer => device flagged offline, branch managers notified once
+    gate-open-seconds: 5
+    monitor-interval: PT1M
+  pricing:
+    enabled: true
+    price-change-notice-days: ${PRICE_CHANGE_NOTICE_DAYS:7}   # autopay members hear of a renewal price rise at least this long before the debit
+    max-override-discount-pct: ${MAX_OVERRIDE_DISCOUNT_PCT:50}  # largest negotiated discount a MANAGER may give (admins: unlimited)
+    notice-lookahead-days: 14         # daily sweep: autopay terms renewing within lead + notice + this many days
+    legal-business-name: ${BUSINESS_LEGAL_NAME:GymOps Fitness Private Limited}   # printed on tax invoices / credit notes
+    sac-code: "999723"                # SAC for fitness / health club services
+    job-cron: ${PRICING_JOB_CRON:0 1 * * * *}   # hourly: apply due price changes, send price-rise notices
+  growth:
+    enabled: ${GROWTH_ENABLED:true}
+    job-cron: ${GROWTH_JOB_CRON:0 10 * * * *}   # hourly: release held referral rewards, scheduled campaigns, sweep
+    referral:
+      referrer-credit: 500.00          # store credit (INR) the referrer earns per friend who joins
+      referee-reward-type: DISCOUNT_CODE   # DISCOUNT_CODE (single-use personal code) or STORE_CREDIT
+      referee-discount-type: PERCENTAGE    # PERCENTAGE or FIXED_AMOUNT (discount-code rewards)
+      referee-reward-value: 10         # 10% off the next membership (or INR amount / credit)
+      referee-code-valid-days: 90
+      hold-days: 14                    # rewards held this long; a refund / cancellation inside the window reverses them
+      monthly-cap: 5                   # referrer rewards per referrer per calendar month
+      attach-grace-days: 7             # a code can still be attached at the desk this long after the first purchase
+    campaigns:
+      attribution-days: 30             # default: a purchase within N days of a message counts as converted
+      cooldown-days: 14                # default: the same campaign does not message a member again within N days
+      send-hour: 10                    # local hour scheduled (daily / weekly) campaigns go out
+      max-audience: 2000               # recipients per run
+      preview-sample: 5

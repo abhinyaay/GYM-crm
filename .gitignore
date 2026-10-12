@@ -1,0 +1,16 @@
+.env
+*.iml
+.idea/
+.vscode/
+.DS_Store
+core-service/target/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+.venv/
+venv/
+infra/aws/terraform/.terraform/
+infra/aws/terraform/*.tfstate*
+infra/aws/terraform/.terraform.lock.hcl

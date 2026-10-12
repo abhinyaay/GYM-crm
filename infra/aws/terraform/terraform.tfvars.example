@@ -1,0 +1,14 @@
+region                = "ap-south-1"
+environment           = "prod"
+acm_certificate_arn   = "arn:aws:acm:ap-south-1:123456789012:certificate/replace-me"
+github_repository     = "your-org/gymops"
+alarm_email           = "oncall@example.com"
+bootstrap_admin_email = "superadmin@example.com"
+
+# E-mail & SMS (credentials go into the <name>/smtp and <name>/sms secrets out of band)
+# public_base_url   = "https://gym.example.com"
+# email_provider    = "smtp"
+# smtp_host         = "email-smtp.ap-south-1.amazonaws.com"
+# mail_from_address = "no-reply@gym.example.com"
+# sms_provider      = "msg91"
+# sms_sender        = { msg91_sender_id = "GYMOPS", msg91_template_id = "replace-me", msg91_dlt_template_id = "replace-me" }
