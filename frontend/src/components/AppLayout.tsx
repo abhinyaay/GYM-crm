@@ -8,6 +8,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 import { hasAnyRole, ORG_WIDE, STAFF } from '@/auth/roles';
 import { label } from '@/lib/format';
+import { useFeatures } from '@/lib/features';
 import { NAV } from './nav';
 import { NotificationsBell } from './NotificationsDrawer';
 
@@ -18,7 +19,8 @@ export function AppLayout() {
   const navigate = useNavigate();
   const { setColorScheme } = useMantineColorScheme();
   const scheme = useComputedColorScheme('light');
-  const items = NAV.filter((n) => hasAnyRole(user, n.roles));
+  const features = useFeatures();
+  const items = NAV.filter((n) => hasAnyRole(user, n.roles) && (!n.feature || features[n.feature]));
   const active = (to: string) =>
     location.pathname === to || (to !== '/me' && to !== '/trainer' && location.pathname.startsWith(to + '/'));
 

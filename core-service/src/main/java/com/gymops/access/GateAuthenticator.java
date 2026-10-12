@@ -3,6 +3,7 @@ package com.gymops.access;
 import com.gymops.common.exception.ApiException;
 import com.gymops.common.exception.ErrorCode;
 import com.gymops.common.web.ClientIp;
+import com.gymops.settings.FeatureService;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
@@ -33,9 +34,12 @@ public class GateAuthenticator {
     private final TransactionTemplate tx;
     private final MeterRegistry meterRegistry;
     private final Clock clock;
+    private final FeatureService features;
 
     public GateAuthenticator(AccessDeviceRepository devices, AccessKeys keys, AccessProperties props, ReplayGuard replayGuard,
-                             PlatformTransactionManager transactionManager, MeterRegistry meterRegistry, Clock clock) {
+                             PlatformTransactionManager transactionManager, MeterRegistry meterRegistry, Clock clock,
+                             FeatureService features) {
+        this.features = features;
         this.devices = devices;
         this.keys = keys;
         this.props = props;
@@ -46,8 +50,8 @@ public class GateAuthenticator {
     }
 
     public DeviceContext authenticate(HttpServletRequest request, byte[] body) {
-        if (!props.enabled()) {
-            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Access control is disabled");
+        if (!props.enabled() || !features.gatesEnabled()) {
+            throw new ApiException(ErrorCode.FEATURE_DISABLED, "Gate access control is switched off by the gym");
         }
         String deviceUid = request.getHeader(GateSignature.HEADER_DEVICE);
         String timestamp = request.getHeader(GateSignature.HEADER_TIMESTAMP);

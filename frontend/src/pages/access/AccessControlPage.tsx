@@ -1,5 +1,6 @@
 import {
-  ActionIcon, Alert, Anchor, Badge, Button, Code, CopyButton, Group, Indicator, Menu, Modal, Paper, ScrollArea, Select,
+  ActionIcon, Alert, Anchor, Badge, Button, Code, CopyButton, Group, Indicator, Menu, Modal, Paper, ScrollArea,
+  SegmentedControl, Select,
   SimpleGrid, Stack, Switch, Table, Tabs, Text, TextInput, Title, Tooltip,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
@@ -12,7 +13,7 @@ import dayjs from 'dayjs';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  DEVICE_DIRECTIONS, DEVICE_TYPES, REASON_TEXT, type AccessEvent, type AccessReason, type AccessStats, type Alarm,
+  DEVICE_DIRECTIONS, DEVICE_TYPES, REASON_TEXT, type AccessEvent, type BranchAccessSettings, type ExitMode, type AccessReason, type AccessStats, type Alarm,
   type Decision, type Device, type DeviceDirection, type DeviceRequest, type DeviceSecret, type DeviceType,
 } from '@/api/access';
 import type { Page } from '@/api/types';
@@ -79,6 +80,7 @@ export default function AccessControlPage() {
           <Tabs.Tab value="live">Live</Tabs.Tab>
           <Tabs.Tab value="devices">Devices</Tabs.Tab>
           <Tabs.Tab value="log">Event log</Tabs.Tab>
+          <Tabs.Tab value="settings">Entry &amp; exit settings</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="live">
           <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="md">
@@ -95,12 +97,75 @@ export default function AccessControlPage() {
         <Tabs.Panel value="log">
           <EventLog branchId={branchId} />
         </Tabs.Panel>
+        <Tabs.Panel value="settings">
+          <ExitSettings manager={manager} />
+        </Tabs.Panel>
       </Tabs>
 
       <DeviceFormModal opened={creating} onClose={() => setCreating(false)} defaultBranchId={branchId
         ?? (user?.branchIds.length === 1 ? user.branchIds[0] : null)} onCreated={setSecret} />
       <SecretModal secret={secret} onClose={() => setSecret(null)} />
     </>
+  );
+}
+
+// ------------------------------------------------------------------ entry & exit settings
+
+/** Per-branch choice: verify only entry (exit by push button) or verify exit too (scan out, anti-passback). */
+function ExitSettings({ manager }: { manager: boolean }) {
+  const settings = useApiQuery<BranchAccessSettings[]>('/api/v1/access/branches/settings');
+  const update = useApiMutation<{ branchId: number; exitMode: ExitMode }, BranchAccessSettings>({
+    request: ({ branchId, exitMode }) => ({ path: `/api/v1/access/branches/${branchId}/settings`, method: 'PUT', body: { exitMode } }),
+    invalidate: ['/api/v1/access/branches'],
+    successMessage: (s) => `${s.branchName}: ${s.exitMode === 'BUTTON' ? 'exit by push button' : 'members scan to exit'}`,
+  });
+  const rows = settings.data ?? [];
+  return (
+    <Stack gap="md">
+      <Alert variant="light" color="blue" title="How members leave">
+        <Text size="sm">
+          <b>Exit button (free exit)</b>: only entry is verified at the gate. Members leave through the exit side or by
+          pressing the exit button; their visit is closed automatically on their next entry or after the assumed visit
+          time. <b>Scan to exit</b>: members scan their fingerprint / card / QR again to leave, and anti-passback stops
+          a second entry without an exit (prevents pass sharing). The daily entry limit is set per plan on the Plans page.
+          Exit buttons and emergency release always open the door, whatever is chosen here.
+        </Text>
+      </Alert>
+      <QueryState isLoading={settings.isLoading} error={settings.error} empty={rows.length === 0} emptyText="No branches.">
+        <Paper withBorder radius="md">
+          <Table.ScrollContainer minWidth={620}>
+          <Table verticalSpacing="sm">
+            <Table.Thead>
+              <Table.Tr><Table.Th>Branch</Table.Th><Table.Th>How members leave</Table.Th><Table.Th /></Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {rows.map((r) => (
+                <Table.Tr key={r.branchId}>
+                  <Table.Td>
+                    <Text size="sm" fw={600}>{r.branchName}</Text>
+                    <Text size="xs" c="dimmed">{r.branchCode}{r.defaulted ? ' · default setting' : ''}</Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <SegmentedControl size="xs" disabled={!manager || update.isPending} value={r.exitMode}
+                      onChange={(v) => update.mutate({ branchId: r.branchId, exitMode: v as ExitMode })}
+                      data={[{ value: 'BUTTON', label: 'Exit button (free exit)' }, { value: 'VERIFIED', label: 'Scan to exit' }]} />
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="xs" c="dimmed">
+                      {r.exitMode === 'BUTTON'
+                        ? `Visits close automatically after ${Math.round(r.buttonExitVisitMinutes / 60 * 10) / 10} h`
+                        : 'Anti-passback on'}
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+          </Table.ScrollContainer>
+        </Paper>
+      </QueryState>
+      {!manager && <Text size="xs" c="dimmed">Only managers and admins can change these settings.</Text>}
+    </Stack>
   );
 }
 

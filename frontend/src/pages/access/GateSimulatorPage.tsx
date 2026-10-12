@@ -3,7 +3,7 @@ import {
   Switch, Table, Tabs, Text, Textarea, TextInput, ThemeIcon, Title, Tooltip,
 } from '@mantine/core';
 import {
-  IconAlarm, IconCheck, IconCloudUpload, IconFingerprint, IconHeartbeat, IconId, IconKey, IconLock, IconLockOpen,
+  IconAlarm, IconCheck, IconCloudUpload, IconDoorExit, IconFingerprint, IconHeartbeat, IconId, IconKey, IconLock, IconLockOpen,
   IconQrcode, IconRefresh, IconShieldCheck, IconShieldX, IconUserScan, IconWifiOff, IconX,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -20,6 +20,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { fromNow, label, time } from '@/lib/format';
 import { cardHash, gateRequest, normalizeCardUid, templateHash, type GateIdentity } from '@/lib/gateClient';
 import { errorMessage, notifySuccess } from '@/lib/notify';
+import { useFeatures } from '@/lib/features';
 import { useApiMutation, useApiQuery } from '@/lib/useApi';
 
 const SECRET_KEY = (uid: string) => `gymops.gate.secret.${uid}`;
@@ -254,6 +255,20 @@ export default function GateSimulatorPage() {
     }
   };
 
+  /** Push-button / free exit: no credential, always opens (fire safety); logged as an anonymous exit. */
+  const pressExitButton = async () => {
+    if (!gate) return;
+    setBusy(true);
+    try {
+      const r = await gateRequest<GateDecision>(gate, 'POST', '/api/v1/access/gate/exit-button', { deviceEventId: newEventId('btn') });
+      show(r.data, { type: 'RFID_CARD', value: '', hint: 'Exit button' }, undefined, r.durationMs, r.signatureValid);
+    } catch (e) {
+      setDisplay({ state: 'error', title: 'GATE ERROR', detail: errorMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const unlocked = display.state === 'granted' && (display.openUntil ?? 0) > now;
   const secondsLeft = unlocked ? Math.ceil(((display.openUntil ?? 0) - now) / 1000) : 0;
 
@@ -342,8 +357,10 @@ export default function GateSimulatorPage() {
           <GateDisplay display={display} unlocked={unlocked} secondsLeft={secondsLeft} offline={offline} />
           {gate && !offline && (
             <Paper withBorder p="md">
-              <Title order={6} mb="xs">Door sensors</Title>
+              <Title order={6} mb="xs">Exit button &amp; door sensors</Title>
               <Group gap="xs">
+                <Button size="xs" variant="filled" color="teal" leftSection={<IconDoorExit size={14} />} loading={busy}
+                  onClick={() => void pressExitButton()}>Press exit button</Button>
                 <Button size="xs" color="red" variant="light" leftSection={<IconAlarm size={14} />}
                   onClick={() => void raiseAlarm('DOOR_FORCED')}>Door forced</Button>
                 <Button size="xs" color="orange" variant="light" onClick={() => void raiseAlarm('DOOR_HELD_OPEN')}>Held open</Button>
@@ -448,6 +465,7 @@ function GateDisplay({ display, unlocked, secondsLeft, offline }: {
 // ------------------------------------------------------------------ credential presenter
 
 function Presenter({ branchId, busy, onScan }: { branchId: number; busy: boolean; onScan: (i: ScanInput) => void }) {
+  const { biometrics } = useFeatures();
   const enrolled = useApiQuery<EnrolledCredential[]>('/api/v1/access/credentials/enrolled',
     { branchId, types: 'FINGERPRINT,FACE' });
   const [template, setTemplate] = useState<string | null>(null);
@@ -465,7 +483,7 @@ function Presenter({ branchId, busy, onScan }: { branchId: number; busy: boolean
       <Tabs defaultValue="card">
         <Tabs.List grow mb="md">
           <Tabs.Tab value="card" leftSection={<IconId size={14} />}>Card</Tabs.Tab>
-          <Tabs.Tab value="bio" leftSection={<IconFingerprint size={14} />}>Biometric</Tabs.Tab>
+          {biometrics && <Tabs.Tab value="bio" leftSection={<IconFingerprint size={14} />}>Biometric</Tabs.Tab>}
           <Tabs.Tab value="qr" leftSection={<IconQrcode size={14} />}>QR</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="card">

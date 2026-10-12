@@ -49,6 +49,7 @@ public final class CredentialHashes {
             case RFID_CARD -> "Card " + tail;
             case FINGERPRINT, FACE -> "Template " + tail;
             case QR -> "QR pass";
+            case EXIT_BUTTON -> "Exit button";
         };
     }
 }

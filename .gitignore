@@ -14,3 +14,7 @@ venv/
 infra/aws/terraform/.terraform/
 infra/aws/terraform/*.tfstate*
 infra/aws/terraform/.terraform.lock.hcl
+
+# gate bridge: local config (device id) and state (cached allowlist, offline event buffer)
+scripts/gate_bridge.json
+gate-bridge-state/

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gymops.access.GateAuthenticator.DeviceContext;
 import com.gymops.access.dto.AccessDtos.AlarmReport;
 import com.gymops.access.dto.AccessDtos.CommandAck;
+import com.gymops.access.dto.AccessDtos.ExitButtonRequest;
 import com.gymops.access.dto.AccessDtos.GateBatchResult;
 import com.gymops.access.dto.AccessDtos.GateDecision;
 import com.gymops.access.dto.AccessDtos.HeartbeatRequest;
@@ -64,6 +65,20 @@ public class GateController {
         DeviceContext ctx = authenticator.authenticate(request, body);
         ScanRequest scan = parse(body, ScanRequest.class);
         return signed(ctx, processOne(ctx, scan), HttpStatus.OK);
+    }
+
+    @Operation(summary = "Exit button / free exit (no credential): always opens; logged as an anonymous exit")
+    @PostMapping("/exit-button")
+    public ResponseEntity<byte[]> exitButton(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+        DeviceContext ctx = authenticator.authenticate(request, body);
+        ExitButtonRequest press = parse(body, ExitButtonRequest.class);
+        GateDecision decision;
+        try {
+            decision = decisions.exitButton(ctx, press.deviceEventId(), press.occurredAt());
+        } catch (DataIntegrityViolationException e) {
+            decision = decisions.findExisting(ctx.deviceId(), press.deviceEventId()).orElseThrow(() -> e);
+        }
+        return signed(ctx, decision, HttpStatus.OK);
     }
 
     @Operation(summary = "Upload events buffered while offline (processed in order, each idempotent)")

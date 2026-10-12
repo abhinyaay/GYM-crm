@@ -10,6 +10,7 @@ public enum AccessReason {
     CREDENTIAL_REVOKED,
     CREDENTIAL_SUSPENDED,
     CONSENT_WITHDRAWN,
+    BIOMETRICS_DISABLED,
     QR_INVALID,
     QR_EXPIRED,
     QR_REUSED,
@@ -20,6 +21,7 @@ public enum AccessReason {
     OUTSIDE_PLAN_HOURS,
     BRANCH_NOT_ALLOWED,
     VISIT_LIMIT,
+    DAILY_ENTRY_LIMIT,
     AT_CAPACITY,
     BRANCH_CLOSED,
     ANTI_PASSBACK,
@@ -39,6 +41,7 @@ public enum AccessReason {
             case BRANCH_NOT_INCLUDED -> BRANCH_NOT_ALLOWED;
             case OUTSIDE_PLAN_HOURS -> OUTSIDE_PLAN_HOURS;
             case VISIT_LIMIT -> VISIT_LIMIT;
+            case DAILY_ENTRY_LIMIT -> DAILY_ENTRY_LIMIT;
             case AT_CAPACITY -> AT_CAPACITY;
         };
     }

@@ -15,6 +15,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { FRONT_DESK, hasAnyRole, MANAGERS } from '@/auth/roles';
 import { InvoiceSummary } from '@/components/billing/InvoiceSummary';
 import { MemberAccessPanel } from '@/components/access/MemberAccessPanel';
+import { useFeatures } from '@/lib/features';
 import { PreferenceMatrix } from '@/components/notifications/PreferenceMatrix';
 import { AutopayControl } from '@/components/billing/AutopayControl';
 import { PayInvoiceModal } from '@/components/billing/PayInvoiceModal';
@@ -38,6 +39,7 @@ export default function MemberDetailPage() {
   const { user } = useAuth();
   const desk = hasAnyRole(user, FRONT_DESK);
   const manager = hasAnyRole(user, MANAGERS);
+  const features = useFeatures();
   const member = useApiQuery<Member>(`/api/v1/members/${id}`);
   const [editOpen, setEditOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
@@ -105,7 +107,7 @@ export default function MemberDetailPage() {
               <Tabs.Tab value="memberships">Memberships</Tabs.Tab>
               <Tabs.Tab value="billing">Billing</Tabs.Tab>
               <Tabs.Tab value="wallet">Cards, autopay &amp; credit</Tabs.Tab>
-              <Tabs.Tab value="access">Gate access</Tabs.Tab>
+              {features.gateAccess && <Tabs.Tab value="access">Gate access</Tabs.Tab>}
               <Tabs.Tab value="attendance">Attendance</Tabs.Tab>
               <Tabs.Tab value="training">Training</Tabs.Tab>
               <Tabs.Tab value="timeline">Timeline</Tabs.Tab>
@@ -114,7 +116,7 @@ export default function MemberDetailPage() {
             <Tabs.Panel value="memberships"><MembershipsTab member={m} /></Tabs.Panel>
             <Tabs.Panel value="billing"><BillingTab memberId={id} /></Tabs.Panel>
             <Tabs.Panel value="wallet"><PaymentMethodsPanel memberId={id} staff /></Tabs.Panel>
-            <Tabs.Panel value="access"><MemberAccessPanel memberId={id} /></Tabs.Panel>
+            {features.gateAccess && <Tabs.Panel value="access"><MemberAccessPanel memberId={id} /></Tabs.Panel>}
             <Tabs.Panel value="attendance"><AttendanceTab memberId={id} /></Tabs.Panel>
             <Tabs.Panel value="training"><TrainingTab memberId={id} /></Tabs.Panel>
             <Tabs.Panel value="timeline"><TimelineTab memberId={id} /></Tabs.Panel>

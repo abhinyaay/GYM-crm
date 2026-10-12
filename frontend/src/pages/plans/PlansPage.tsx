@@ -228,6 +228,11 @@ function PlanCard({ plan, canEdit, canPrice, pending, onEdit, onStatus, onChange
           {access.maxVisitsPerMonth != null && (
             <Badge variant="light" color="grape">{access.maxVisitsPerMonth} visits / month</Badge>
           )}
+          {access.maxEntriesPerDay != null && (
+            <Badge variant="light" color="orange">
+              {access.maxEntriesPerDay} {access.maxEntriesPerDay === 1 ? 'entry' : 'entries'} / day
+            </Badge>
+          )}
           <Badge variant="light" color={plan.classCreditsPerMonth === 0 ? 'gray' : 'indigo'}>
             {plan.classCreditsPerMonth == null
               ? 'Unlimited classes'
@@ -304,6 +309,7 @@ interface PlanFormValues {
   accessStartTime: string;
   accessEndTime: string;
   maxVisitsPerMonth: number | string;
+  maxEntriesPerDay: number | string;
   classCreditsPerMonth: number | string;
   freezeAllowed: boolean;
   minFreezeDays: number | string;
@@ -328,7 +334,7 @@ function initialValues(plan: Plan | null): PlanFormValues {
   if (!plan) {
     return {
       code: '', name: '', description: '', billingPeriod: 'MONTHLY', customDurationDays: '', price: '', joiningFee: 0,
-      allBranchAccess: false, restrictHours: false, accessStartTime: '', accessEndTime: '', maxVisitsPerMonth: '',
+      allBranchAccess: false, restrictHours: false, accessStartTime: '', accessEndTime: '', maxVisitsPerMonth: '', maxEntriesPerDay: '',
       classCreditsPerMonth: '',
       freezeAllowed: false, minFreezeDays: 7, maxFreezeDays: 30, maxFreezeCount: 1, cancellationPolicy: 'NON_REFUNDABLE',
       coolingOffDays: 0, cancellationFee: 0, gracePeriodDays: 3, benefits: '', priceChangeReason: '',
@@ -347,6 +353,7 @@ function initialValues(plan: Plan | null): PlanFormValues {
     accessStartTime: hhmm(plan.access.accessStartTime),
     accessEndTime: hhmm(plan.access.accessEndTime),
     maxVisitsPerMonth: plan.access.maxVisitsPerMonth ?? '',
+    maxEntriesPerDay: plan.access.maxEntriesPerDay ?? '',
     classCreditsPerMonth: plan.classCreditsPerMonth ?? '',
     freezeAllowed: plan.freezePolicy.allowed,
     minFreezeDays: plan.freezePolicy.minDays,
@@ -378,6 +385,7 @@ function PlanForm({ plan, onDone }: { plan: Plan | null; onDone: () => void }) {
       accessEndTime: (v, vals) =>
         !vals.restrictHours ? null : !v ? 'Required' : vals.accessStartTime && v <= vals.accessStartTime ? 'Must be after start' : null,
       maxVisitsPerMonth: (v) => inRange(v, 1, 100, '1-100 (leave empty for unlimited)'),
+      maxEntriesPerDay: (v) => inRange(v, 1, 20, '1-20 (leave empty for unlimited)'),
       classCreditsPerMonth: (v) => inRange(v, 0, 100, '0-100 (leave empty for unlimited)'),
       minFreezeDays: (v, vals) => (vals.freezeAllowed ? inRange(v, 0, 365, '0-365') : null),
       maxFreezeDays: (v, vals) => {
@@ -415,6 +423,7 @@ function PlanForm({ plan, onDone }: { plan: Plan | null; onDone: () => void }) {
         accessStartTime: v.restrictHours ? `${v.accessStartTime}:00` : null,
         accessEndTime: v.restrictHours ? `${v.accessEndTime}:00` : null,
         maxVisitsPerMonth: toNum(v.maxVisitsPerMonth),
+        maxEntriesPerDay: toNum(v.maxEntriesPerDay),
         classCreditsPerMonth: toNum(v.classCreditsPerMonth),
         freezeAllowed: v.freezeAllowed,
         minFreezeDays: v.freezeAllowed ? int(v.minFreezeDays) : 0,
@@ -494,6 +503,9 @@ function PlanForm({ plan, onDone }: { plan: Plan | null; onDone: () => void }) {
           )}
           <NumberInput label="Max visits / month" placeholder="Unlimited" min={1} max={100} allowDecimal={false}
             {...form.getInputProps('maxVisitsPerMonth')} />
+          <NumberInput label="Max entries per day" placeholder="Unlimited" min={1} max={20} allowDecimal={false}
+            description="How many times a member may enter per day (gate or desk)"
+            {...form.getInputProps('maxEntriesPerDay')} />
           <NumberInput label="Group classes / month" placeholder="Unlimited" min={0} max={100} allowDecimal={false}
             description="0 = classes not included" {...form.getInputProps('classCreditsPerMonth')} />
         </SimpleGrid>

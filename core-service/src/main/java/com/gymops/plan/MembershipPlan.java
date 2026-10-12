@@ -69,6 +69,10 @@ public class MembershipPlan extends BaseEntity {
     @Column(name = "max_visits_per_month")
     private Integer maxVisitsPerMonth;
 
+    /** How many times a member may enter per day (gate or desk): null = unlimited. */
+    @Column(name = "max_entries_per_day")
+    private Integer maxEntriesPerDay;
+
     /** Group-class entitlement per calendar month: null = unlimited, 0 = no classes included. */
     @Column(name = "class_credits_per_month")
     private Integer classCreditsPerMonth;

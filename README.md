@@ -1,5 +1,7 @@
 # GymOps: Gym Membership & Operations Platform
 
+Non-technical setup guide: [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md)
+
 GymOps is a backend for a multi-branch gym business. It runs memberships, billing, front-desk check-in, trainers, workout programmes, member support and management analytics.
 
 There are two services:
@@ -556,7 +558,20 @@ sequenceDiagram
 - **Decisions are idempotent:** `UNIQUE(device_id, device_event_id)` plus a re-check after the member lock. A retried or duplicated event returns the original decision (`replayed: true`) and never creates a second visit.
 - `access_events` is **append-only**: a trigger rejects UPDATE and DELETE.
 
-**Reason codes:** `UNKNOWN_CREDENTIAL`, `CREDENTIAL_PENDING`, `CREDENTIAL_REVOKED`, `CREDENTIAL_SUSPENDED`, `CONSENT_WITHDRAWN`, `QR_INVALID`, `QR_EXPIRED`, `QR_REUSED`, `MEMBER_SUSPENDED`, `MEMBER_INACTIVE`, `NO_ACTIVE_MEMBERSHIP`, `FROZEN`, `OUTSIDE_PLAN_HOURS`, `BRANCH_NOT_ALLOWED`, `VISIT_LIMIT`, `AT_CAPACITY`, `BRANCH_CLOSED`, `ANTI_PASSBACK`, `DIRECTION_NOT_ALLOWED`, `OFFLINE_DENIED`.
+**Reason codes:** `UNKNOWN_CREDENTIAL`, `CREDENTIAL_PENDING`, `CREDENTIAL_REVOKED`, `CREDENTIAL_SUSPENDED`, `CONSENT_WITHDRAWN`, `QR_INVALID`, `QR_EXPIRED`, `QR_REUSED`, `MEMBER_SUSPENDED`, `MEMBER_INACTIVE`, `NO_ACTIVE_MEMBERSHIP`, `FROZEN`, `OUTSIDE_PLAN_HOURS`, `BRANCH_NOT_ALLOWED`, `VISIT_LIMIT`, `DAILY_ENTRY_LIMIT`, `AT_CAPACITY`, `BRANCH_CLOSED`, `ANTI_PASSBACK`, `DIRECTION_NOT_ALLOWED`, `OFFLINE_DENIED`.
+
+**Optional module.** Gate access control and, separately, fingerprint / face are switched on or off by an admin in **Settings** (`PUT /api/v1/settings/features`, stored in `app_settings`, so every instance agrees). With gates off, the access menus, Entry pass and Gate access tab are hidden, the staff / member access API and the device API answer `403 FEATURE_DISABLED`, and offline alerts stop; the front desk checks members in as before. With only biometrics off, cards and the QR pass keep working, consent and enrolment are hidden, biometric entry scans are refused (`BIOMETRICS_DISABLED`) and biometric credentials are left out of the offline allowlist. Existing enrolments are kept.
+
+**Entry is always verified; the owner chooses how members leave** (Access control → *Entry & exit settings*, per branch, `PUT /api/v1/access/branches/{id}/settings`):
+
+| Exit mode | How members leave | What GymOps does |
+|---|---|---|
+| `BUTTON` (default, `app.access.default-exit-mode`) | Push-button / free exit side; no scan | A new entry ends the member's previous visit, so there is no anti-passback lock-out. Visits nobody closed are ended `button-exit-visit-length` (2 h) after entry, without notifying the member. Exit-button presses (`POST /gate/exit-button`) are logged as anonymous `EXIT_BUTTON` events. |
+| `VERIFIED` | Scan fingerprint / card / QR at an exit reader | Exit closes the visit; anti-passback (below) stops a second entry without an exit, which prevents pass sharing. |
+
+The exit button **always opens** in both modes (fire safety); at a `VERIFIED` branch it is flagged as an unverified exit. Heartbeat and allowlist responses carry `exitMode` so gates and bridges know the branch policy.
+
+**Daily entry limit:** each plan can limit how many times a member may enter per day (`maxEntriesPerDay`, Plans page; empty = unlimited). It is part of the shared entry rules, so it applies at the gate (`DAILY_ENTRY_LIMIT`) and at the front desk alike, counted per day in the branch's time zone.
 
 **Business rules**
 
@@ -598,6 +613,7 @@ sequenceDiagram
 - **Member detail → Gate access:** consent, credentials and the member's gate events.
 - **Member → Entry pass** (`/me/pass`): rotating QR with countdown, own consent and recent entries.
 - **CLI:** `scripts/gate_simulator.py` (stdlib only) does heartbeat, scan, offline batch, allowlist (signature verified), commands, ack and alarms.
+- **Gate bridge:** `scripts/gate_bridge.py` (stdlib only, config `scripts/gate_bridge.example.json`) runs next to a real gate: keyboard-type card / QR readers or a local HTTP input for fingerprint terminals, relay output, signed offline allowlist with buffered uploads, enrolment commands. Setup: [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md#6-how-the-gate-vendor-connects-devices-to-the-published-site).
 
 **Demo data** (`AccessDemoSeeder`, `@Order(6)`):
 

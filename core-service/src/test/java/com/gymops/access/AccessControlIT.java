@@ -91,6 +91,10 @@ class AccessControlIT extends IntegrationTestBase {
         planId = createPlan(admin, "MONTHLY", "1500.00", "PRORATED", 0, Map.of());
         manager = login(createStaff(admin, "MANAGER", branchId), STAFF_PASSWORD);
         desk = login(createStaff(admin, "RECEPTIONIST", branchId), STAFF_PASSWORD);
+        // these scenarios exercise scan-to-exit (anti-passback); free-exit branches are covered in EntryRulesIT
+        Api.Resp mode = api.send("PUT", "/api/v1/access/branches/" + branchId + "/settings", manager,
+                Map.of("exitMode", "VERIFIED"), Map.of());
+        assertThat(mode.status()).as(mode.toString()).isEqualTo(200);
     }
 
     // ------------------------------------------------------------------ helpers

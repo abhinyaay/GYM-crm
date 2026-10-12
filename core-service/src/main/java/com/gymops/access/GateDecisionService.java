@@ -10,6 +10,7 @@ import com.gymops.attendance.EntryCheck;
 import com.gymops.branch.GymBranch;
 import com.gymops.member.Member;
 import com.gymops.member.MemberRepository;
+import com.gymops.settings.FeatureService;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
@@ -59,6 +60,8 @@ public class GateDecisionService {
     private final QrPassService qrPasses;
     private final ReplayGuard replayGuard;
     private final AccessProperties props;
+    private final BranchAccessSettingsService branchSettings;
+    private final FeatureService features;
     private final MeterRegistry meterRegistry;
     private final Clock clock;
 
@@ -114,6 +117,11 @@ public class GateDecisionService {
     // ------------------------------------------------------------------ live decision
 
     private Outcome decide(AccessDevice device, Direction direction, Resolution r, Member member, Instant now) {
+        if (r.credential() != null && r.credential().getType().isBiometric() && direction == Direction.ENTRY
+                && !features.biometricsEnabled()) {
+            return Outcome.denied(AccessReason.BIOMETRICS_DISABLED,
+                    "Fingerprint / face entry is switched off; use your card or the QR pass", r, null);
+        }
         boolean exitWithKnownMember = direction == Direction.EXIT && member != null
                 && (r.failure() == null || r.failure() == AccessReason.CREDENTIAL_REVOKED);
         if (r.failure() != null && !exitWithKnownMember) {
@@ -141,7 +149,10 @@ public class GateDecisionService {
         }
         Optional<Attendance> open = attendance.lockOpenVisit(member.getId());
         boolean violation = false;
-        if (open.isPresent()) {
+        if (open.isPresent() && branchSettings.exitMode(branch.getId()) == ExitMode.BUTTON) {
+            // free-exit branch: nobody scans out, so a new entry simply ends the previous visit
+            attendance.recordExit(open.get(), now);
+        } else if (open.isPresent()) {
             if (props.antiPassback() == AntiPassbackMode.HARD) {
                 return Outcome.denied(AccessReason.ANTI_PASSBACK, "Already inside since " + open.get().getCheckInTime()
                         + " (branch " + open.get().getBranch().getId() + "); exit through a gate first", r, name);
@@ -173,6 +184,34 @@ public class GateDecisionService {
                 r.credential() == null ? null : r.credential().getId(), r.hint(), null, true, name);
     }
 
+    // ------------------------------------------------------------------ exit button
+
+    /**
+     * An exit-button press / free exit. Always opens (people must never be trapped inside); at a VERIFIED-exit
+     * branch it is logged as an unverified exit. Idempotent per {@code deviceEventId}.
+     */
+    @Transactional
+    public GateDecision exitButton(DeviceContext ctx, String deviceEventId, Instant occurredAtOrNull) {
+        Instant now = Instant.now(clock);
+        Optional<AccessEvent> existing = events.findByDeviceIdAndDeviceEventId(ctx.deviceId(), deviceEventId);
+        if (existing.isPresent()) {
+            return replay(existing.get(), now);
+        }
+        AccessDevice device = devices.findById(ctx.deviceId()).orElseThrow();
+        Instant occurredAt = occurredAtOrNull == null ? now : clampToNow(occurredAtOrNull, now);
+        boolean verifiedBranch = branchSettings.exitMode(device.getBranch().getId()) == ExitMode.VERIFIED;
+        AccessEvent event = events.saveAndFlush(AccessEvent.builder()
+                .deviceId(device.getId()).branchId(device.getBranch().getId()).deviceEventId(deviceEventId)
+                .credentialType(CredentialType.EXIT_BUTTON).credentialHint("Exit button").direction(Direction.EXIT)
+                .decision(Decision.GRANTED).reasonCode(AccessReason.OK)
+                .message(verifiedBranch ? "Exit button used at a scan-to-exit branch (unverified exit)" : "Free exit")
+                .offline(occurredAtOrNull != null && occurredAt.isBefore(now.minusSeconds(30)))
+                .antiPassbackViolation(verifiedBranch).occurredAt(occurredAt).receivedAt(now).build());
+        meterRegistry.counter("gymops.access.decisions", "decision", "GRANTED", "reason", "EXIT_BUTTON", "direction", "EXIT",
+                "offline", String.valueOf(event.isOffline())).increment();
+        return toDecision(event, null, false, now);
+    }
+
     // ------------------------------------------------------------------ offline reconciliation
 
     private Outcome reconcile(AccessDevice device, Direction direction, ScanRequest request, Resolution r, Member member,
@@ -201,6 +240,11 @@ public class GateDecisionService {
                     member.getId(), credentialId, r.hint(), null, true, name);
         }
         AccessReason policy = r.failure() != null ? r.failure() : credentialProblemAt(r.credential(), member, occurredAt);
+        if (open.isPresent() && branchSettings.exitMode(device.getBranch().getId()) == ExitMode.BUTTON
+                && open.get().getCheckInTime().isBefore(occurredAt)) {
+            attendance.recordExit(open.get(), occurredAt);   // free-exit branch: the new entry ends the previous visit
+            open = Optional.empty();
+        }
         if (open.isPresent()) {
             return new Outcome(Decision.GRANTED, AccessReason.ANTI_PASSBACK, "Offline entry while a visit was already open",
                     member.getId(), credentialId, r.hint(), null, true, name);

@@ -17,7 +17,7 @@ public record PlanResponse(
         Integer classCreditsPerMonth) {
 
     public record AccessRules(boolean allBranchAccess, LocalTime accessStartTime, LocalTime accessEndTime,
-                              Integer maxVisitsPerMonth) {
+                              Integer maxVisitsPerMonth, Integer maxEntriesPerDay) {
     }
 
     public record FreezePolicy(boolean allowed, int minDays, int maxDays, int maxCount) {
@@ -30,7 +30,8 @@ public record PlanResponse(
         return new PlanResponse(p.getId(), p.getCode(), p.getName(), p.getDescription(),
                 p.getBillingPeriod(), p.getDurationMonths(), p.getDurationDays(),
                 p.getPrice(), p.getCurrency(), p.getJoiningFee(),
-                new AccessRules(p.isAllBranchAccess(), p.getAccessStartTime(), p.getAccessEndTime(), p.getMaxVisitsPerMonth()),
+                new AccessRules(p.isAllBranchAccess(), p.getAccessStartTime(), p.getAccessEndTime(), p.getMaxVisitsPerMonth(),
+                        p.getMaxEntriesPerDay()),
                 new FreezePolicy(p.isFreezeAllowed(), p.getMinFreezeDays(), p.getMaxFreezeDays(), p.getMaxFreezeCount()),
                 new CancellationTerms(p.getCancellationPolicy(), p.getCoolingOffDays(), p.getCancellationFee()),
                 p.getGracePeriodDays(), p.getStatus(), List.copyOf(p.getBenefits()), p.getVersion(),

@@ -5,8 +5,8 @@ import com.gymops.access.dto.AccessDtos.ConsentResponse;
 import com.gymops.access.dto.AccessDtos.ConsentStatus;
 import com.gymops.access.dto.AccessDtos.ConsentWithdrawal;
 import com.gymops.access.dto.AccessDtos.GrantConsentRequest;
-import com.gymops.audit.AuditService;
 import com.gymops.audit.AuditService.AuditEvent;
+import com.gymops.audit.AuditService;
 import com.gymops.common.exception.BusinessRuleException;
 import com.gymops.common.exception.ConflictException;
 import com.gymops.common.exception.ErrorCode;
@@ -19,6 +19,7 @@ import com.gymops.notification.NotificationType;
 import com.gymops.security.AccessPolicy;
 import com.gymops.security.CurrentUser;
 import com.gymops.security.UserPrincipal;
+import com.gymops.settings.FeatureService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -42,6 +43,7 @@ public class ConsentService {
     private final AuditService audit;
     private final NotificationService notifications;
     private final Clock clock;
+    private final FeatureService features;
 
     public ConsentNotice notice() {
         return new ConsentNotice(BiometricConsentNotice.VERSION, BiometricConsent.PURPOSE, BiometricConsentNotice.TEXT,
@@ -60,6 +62,7 @@ public class ConsentService {
 
     @Transactional
     public ConsentResponse grant(Long memberId, GrantConsentRequest request) {
+        features.requireBiometrics();
         Member member = lockAndAuthorize(memberId);
         if (!BiometricConsentNotice.VERSION.equals(request.noticeVersion())) {
             throw new BusinessRuleException(ErrorCode.VALIDATION_FAILED, "The consent notice has changed (current version "

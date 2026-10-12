@@ -20,6 +20,7 @@ import com.gymops.attendance.EntryCheck;
 import com.gymops.attendance.EntryDenial;
 import com.gymops.branch.GymBranch;
 import com.gymops.member.Member;
+import com.gymops.settings.FeatureService;
 import com.gymops.member.MemberRepository;
 import com.gymops.subscription.ChangeType;
 import com.gymops.subscription.Subscription;
@@ -57,6 +58,10 @@ class GateDecisionServiceTest {
     @Mock ReplayGuard replayGuard;
 
     private GymBranch branch;
+    @Mock BranchAccessSettingsService branchSettings;
+    @Mock FeatureService features;
+    /** Exit mode the mocked branch settings report; the existing anti-passback tests use scan-to-exit. */
+    private ExitMode exitMode = ExitMode.VERIFIED;
     private Member member;
     private AccessDevice device;
     private Subscription subscription;
@@ -86,9 +91,12 @@ class GateDecisionServiceTest {
 
     private GateDecisionService service(AntiPassbackMode mode) {
         AccessProperties props = new AccessProperties(true, null, Duration.ofMinutes(5), Duration.ofMinutes(15),
-                Duration.ofSeconds(30), 1, mode, 24, Duration.ofMinutes(5), 5, Duration.ofMinutes(1));
+                Duration.ofSeconds(30), 1, mode, 24, Duration.ofMinutes(5), 5, Duration.ofMinutes(1), ExitMode.BUTTON,
+                Duration.ofHours(2));
+        lenient().when(branchSettings.exitMode(any())).thenReturn(exitMode);
+        lenient().when(features.biometricsEnabled()).thenReturn(true);
         return new GateDecisionService(events, devices, credentials, consents, members, attendance, qrPasses, replayGuard,
-                props, new SimpleMeterRegistry(), Clock.fixed(NOW, IST));
+                props, branchSettings, features, new SimpleMeterRegistry(), Clock.fixed(NOW, IST));
     }
 
     private Attendance visit(GymBranch at, Instant checkIn) {
@@ -207,5 +215,19 @@ class GateDecisionServiceTest {
         ReflectionTestUtils.setField(device, "direction", DeviceDirection.ENTRY);
         GateDecision d = service(AntiPassbackMode.HARD).process(ctx, scan(Direction.EXIT));
         assertThat(d.reasonCode()).isEqualTo(AccessReason.DIRECTION_NOT_ALLOWED);
+    }
+
+    @Test
+    void buttonExitBranchLetsTheNextEntryEndThePreviousVisit() {
+        exitMode = ExitMode.BUTTON;
+        Attendance open = visit(branch, NOW.minus(Duration.ofMinutes(40)));
+        when(attendance.lockOpenVisit(5L)).thenReturn(Optional.of(open));
+
+        var decision = service(AntiPassbackMode.HARD).process(ctx, scan(Direction.ENTRY));
+
+        assertThat(decision.decision()).isEqualTo(Decision.GRANTED);
+        assertThat(decision.reasonCode()).isEqualTo(AccessReason.OK);
+        assertThat(decision.antiPassbackViolation()).isFalse();
+        verify(attendance).recordExit(open, NOW);
     }
 }

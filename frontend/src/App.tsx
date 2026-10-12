@@ -5,6 +5,7 @@ import type { RoleName } from './api/types';
 import { useAuth } from './auth/AuthContext';
 import { RequireAuth } from './auth/RequireAuth';
 import { FRONT_DESK, homePath, MANAGERS, ORG_WIDE } from './auth/roles';
+import { FeatureGate } from './components/FeatureGate';
 import { AppLayout } from './components/AppLayout';
 
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
@@ -51,6 +52,8 @@ const EnquiryPage = lazy(() => import('./pages/leads/EnquiryPage'));
 const NotificationSettingsPage = lazy(() => import('./pages/notifications/NotificationSettingsPage'));
 const MessagingCenterPage = lazy(() => import('./pages/notifications/MessagingCenterPage'));
 const UnsubscribePage = lazy(() => import('./pages/notifications/UnsubscribePage'));
+const GuidePage = lazy(() => import('./pages/guide/GuidePage'));
+const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'));
 // access control
 const AccessControlPage = lazy(() => import('./pages/access/AccessControlPage'));
 const GateSimulatorPage = lazy(() => import('./pages/access/GateSimulatorPage'));
@@ -80,6 +83,7 @@ export function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/enquire" element={<EnquiryPage />} />
         <Route path="/unsubscribe" element={<UnsubscribePage />} />
+        <Route path="/guide" element={<GuidePage />} />
         <Route element={<Guard><AppLayout /></Guard>}>
           <Route index element={<Home />} />
           <Route path="profile" element={<ProfilePage />} />
@@ -117,9 +121,10 @@ export function App() {
           <Route path="leads" element={<Guard roles={FRONT_DESK}><LeadsPage /></Guard>} />
           <Route path="leads/:id" element={<Guard roles={FRONT_DESK}><LeadDetailPage /></Guard>} />
           <Route path="messaging" element={<Guard roles={MANAGERS}><MessagingCenterPage /></Guard>} />
+          <Route path="settings" element={<Guard roles={ORG_WIDE}><SettingsPage /></Guard>} />
           <Route path="me/notifications" element={<Guard roles={['MEMBER']}><NotificationSettingsPage /></Guard>} />
-          <Route path="access" element={<Guard roles={FRONT_DESK}><AccessControlPage /></Guard>} />
-          <Route path="access/gate" element={<Guard roles={FRONT_DESK}><GateSimulatorPage /></Guard>} />
+          <Route path="access" element={<Guard roles={FRONT_DESK}><FeatureGate feature="gateAccess"><AccessControlPage /></FeatureGate></Guard>} />
+          <Route path="access/gate" element={<Guard roles={FRONT_DESK}><FeatureGate feature="gateAccess"><GateSimulatorPage /></FeatureGate></Guard>} />
           <Route path="me/pass" element={<Guard roles={['MEMBER']}><MemberEntryPassPage /></Guard>} />
           <Route path="campaigns" element={<Guard roles={MANAGERS}><CampaignsPage /></Guard>} />
           <Route path="referrals" element={<Guard roles={MANAGERS}><ReferralsPage /></Guard>} />

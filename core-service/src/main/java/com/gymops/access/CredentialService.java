@@ -5,8 +5,8 @@ import com.gymops.access.dto.AccessDtos.CardEnrollRequest;
 import com.gymops.access.dto.AccessDtos.CommandView;
 import com.gymops.access.dto.AccessDtos.CredentialResponse;
 import com.gymops.access.dto.AccessDtos.EnrolledCredential;
-import com.gymops.audit.AuditService;
 import com.gymops.audit.AuditService.AuditEvent;
+import com.gymops.audit.AuditService;
 import com.gymops.common.event.DomainEvents;
 import com.gymops.common.exception.BusinessRuleException;
 import com.gymops.common.exception.ConflictException;
@@ -19,6 +19,7 @@ import com.gymops.notification.NotificationService;
 import com.gymops.notification.NotificationType;
 import com.gymops.security.AccessPolicy;
 import com.gymops.security.CurrentUser;
+import com.gymops.settings.FeatureService;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
@@ -56,6 +57,7 @@ public class CredentialService {
     private final NotificationService notifications;
     private final EntityManager entityManager;
     private final Clock clock;
+    private final FeatureService features;
 
     @Transactional(readOnly = true)
     public List<CredentialResponse> list(Long memberId) {
@@ -101,6 +103,7 @@ public class CredentialService {
      */
     @Transactional
     public CredentialResponse requestBiometricEnrollment(Long memberId, BiometricEnrollRequest request) {
+        features.requireBiometrics();
         Member member = lockMember(memberId);
         access.assertBranchAccess(member.getHomeBranch().getId());
         requireActiveMember(member);

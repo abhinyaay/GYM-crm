@@ -76,6 +76,7 @@ function PlanCatalogue({ plans, onBuy }: { plans: Plan[]; onBuy?: () => void }) 
             <Text size="xs" c="dimmed">
               {p.access.allBranchAccess ? 'All branches' : 'Home branch only'}
               {p.access.maxVisitsPerMonth ? ` · ${p.access.maxVisitsPerMonth} visits/month` : ' · unlimited visits'}
+              {p.access.maxEntriesPerDay ? ` · ${p.access.maxEntriesPerDay}× entry per day` : ''}
             </Text>
             {p.access.accessStartTime && (
               <Text size="xs" c="orange">Entry {p.access.accessStartTime.slice(0, 5)}–{p.access.accessEndTime?.slice(0, 5)}</Text>

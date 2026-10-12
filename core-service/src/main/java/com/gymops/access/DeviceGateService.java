@@ -17,6 +17,7 @@ import com.gymops.common.exception.ResourceNotFoundException;
 import com.gymops.member.Member;
 import com.gymops.notification.NotificationType;
 import com.gymops.plan.MembershipPlan;
+import com.gymops.settings.FeatureService;
 import com.gymops.subscription.Subscription;
 import com.gymops.subscription.SubscriptionRepository;
 import com.gymops.subscription.SubscriptionStatus;
@@ -53,6 +54,8 @@ public class DeviceGateService {
     private final CredentialService credentialService;
     private final AccessNotifier notifier;
     private final AccessProperties props;
+    private final BranchAccessSettingsService branchSettings;
+    private final FeatureService features;
     private final Clock clock;
 
     @Transactional
@@ -63,7 +66,8 @@ public class DeviceGateService {
             log.info("access_device_online device={} branch={}", device.getDeviceUid(), device.getBranch().getId());
         }
         return new HeartbeatResponse(now, device.getStatus(), commands.countOpen(device.getId()),
-                (int) Math.min(Duration.ofHours(props.offlineAllowlistHours()).toSeconds() / 4, 3600));
+                (int) Math.min(Duration.ofHours(props.offlineAllowlistHours()).toSeconds() / 4, 3600),
+                branchSettings.exitMode(device.getBranch().getId()));
     }
 
     /** Open commands, oldest first; each poll re-delivers until the device acknowledges (at-least-once). */
@@ -135,7 +139,11 @@ public class DeviceGateService {
                         .collect(Collectors.groupingBy(s -> s.getMember().getId()));
         LocalDate today = LocalDate.ofInstant(now, zone);
         List<AllowlistEntry> entries = new ArrayList<>();
+        boolean biometricsOn = features.biometricsEnabled();
         for (AccessCredential c : active) {
+            if (c.getType().isBiometric() && !biometricsOn) {
+                continue;   // fingerprint / face switched off: the gate must not admit them offline either
+            }
             Member member = c.getMember();
             Optional<Subscription> sub = subsByMember.getOrDefault(member.getId(), List.of()).stream()
                     .filter(s -> s.grantsAccessOn(today))
@@ -157,8 +165,9 @@ public class DeviceGateService {
         return new Allowlist(device.getDeviceUid(), branch.getId(), branch.getCode(), zone.getId(), now, horizon,
                 "RFID_CARD: sha256(\"RFID_CARD:\" + UPPERCASE_HEX_UID); FINGERPRINT/FACE: sha256(\"TEMPLATE:\" + type + \":\" + "
                         + "templateRef)", hours, entries,
-                "Offline mode cannot enforce monthly visit caps, live capacity or QR passes; upload buffered events with "
-                        + "offlineDecision set when the connection returns.");
+                "Offline mode cannot enforce monthly visit caps, daily entry limits, live capacity or QR passes; upload "
+                        + "buffered events with offlineDecision set when the connection returns.",
+                branchSettings.exitMode(branch.getId()));
     }
 
     /** End (exclusive) of the last day, within the horizon, on which the subscription still grants access. */

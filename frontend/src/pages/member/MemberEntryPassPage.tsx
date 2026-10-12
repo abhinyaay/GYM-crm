@@ -14,6 +14,7 @@ import { QueryState } from '@/components/QueryState';
 import { StatusBadge } from '@/components/StatusBadge';
 import { dateTime, label } from '@/lib/format';
 import { errorMessage } from '@/lib/notify';
+import { useFeatures } from '@/lib/features';
 import { useApiQuery } from '@/lib/useApi';
 
 /**
@@ -21,6 +22,10 @@ import { useApiQuery } from '@/lib/useApi';
  * usable once). Also shows recent gate entries / exits and lets the member manage biometric consent.
  */
 export default function MemberEntryPassPage() {
+  const { gateAccess, biometrics } = useFeatures();
+  if (!gateAccess) {
+    return <PageHeader title="Entry pass" subtitle="Gate entry is not used at this gym; check in at the front desk." />;
+  }
   return (
     <>
       <PageHeader title="Entry pass" subtitle="Show this code at the gate. It changes every 30 seconds and works once." />
@@ -28,7 +33,7 @@ export default function MemberEntryPassPage() {
         <PassCard />
         <Stack gap="md">
           <MyCredentials />
-          <MyConsent />
+          {biometrics && <MyConsent />}
         </Stack>
       </SimpleGrid>
       <RecentEntries />

@@ -13,7 +13,7 @@ export type AlarmType = 'DOOR_FORCED' | 'DOOR_HELD_OPEN' | 'TAILGATING' | 'TAMPE
 export type AccessReason =
   | 'OK' | 'UNKNOWN_CREDENTIAL' | 'CREDENTIAL_PENDING' | 'CREDENTIAL_REVOKED' | 'CREDENTIAL_SUSPENDED'
   | 'CONSENT_WITHDRAWN' | 'QR_INVALID' | 'QR_EXPIRED' | 'QR_REUSED' | 'MEMBER_SUSPENDED' | 'MEMBER_INACTIVE'
-  | 'NO_ACTIVE_MEMBERSHIP' | 'FROZEN' | 'OUTSIDE_PLAN_HOURS' | 'BRANCH_NOT_ALLOWED' | 'VISIT_LIMIT' | 'AT_CAPACITY'
+  | 'BIOMETRICS_DISABLED' | 'NO_ACTIVE_MEMBERSHIP' | 'FROZEN' | 'OUTSIDE_PLAN_HOURS' | 'BRANCH_NOT_ALLOWED' | 'VISIT_LIMIT' | 'DAILY_ENTRY_LIMIT' | 'AT_CAPACITY'
   | 'BRANCH_CLOSED' | 'ANTI_PASSBACK' | 'DIRECTION_NOT_ALLOWED' | 'OFFLINE_DENIED';
 
 export const DEVICE_TYPES: DeviceType[] = ['TURNSTILE', 'DOOR', 'KIOSK'];
@@ -38,6 +38,8 @@ export const REASON_TEXT: Record<AccessReason, string> = {
   OUTSIDE_PLAN_HOURS: 'Outside plan hours',
   BRANCH_NOT_ALLOWED: 'Plan not valid at this branch',
   VISIT_LIMIT: 'Monthly visit limit reached',
+  BIOMETRICS_DISABLED: 'Fingerprint / face entry is switched off',
+  DAILY_ENTRY_LIMIT: 'Daily entry limit reached',
   AT_CAPACITY: 'Branch at capacity',
   BRANCH_CLOSED: 'Branch closed',
   ANTI_PASSBACK: 'Anti-passback',
@@ -173,7 +175,7 @@ export interface AccessEvent {
   memberId: number | null;
   memberCode: string | null;
   memberName: string | null;
-  credentialType: CredentialType;
+  credentialType: CredentialType | 'EXIT_BUTTON';
   credentialHint: string | null;
   direction: Direction;
   decision: Decision;
@@ -285,3 +287,15 @@ export interface Allowlist {
 
 /** Deterministic UID of a seeded demo card (same formula as AccessDemoSeeder): "D3" + 6 hex digits of the member id. */
 export const demoCardUid = (memberId: number) => 'D3' + memberId.toString(16).toUpperCase().padStart(6, '0');
+
+/** How members leave a branch: BUTTON = free exit (only entry verified), VERIFIED = scan to exit. */
+export type ExitMode = 'BUTTON' | 'VERIFIED';
+
+export interface BranchAccessSettings {
+  branchId: number;
+  branchCode: string;
+  branchName: string;
+  exitMode: ExitMode;
+  defaulted: boolean;
+  buttonExitVisitMinutes: number;
+}

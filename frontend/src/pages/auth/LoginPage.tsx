@@ -61,6 +61,9 @@ export default function LoginPage() {
             Just looking? <Anchor component={Link} to="/enquire">Book a free trial</Anchor>
           </Text>
         </Paper>
+        <Text size="xs" ta="center" mt="md" c="dimmed">
+          Setting up GymOps for your gym? <Anchor component={Link} to="/guide" size="xs">Read the setup guide</Anchor>
+        </Text>
       </Box>
     </Center>
   );

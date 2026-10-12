@@ -1,0 +1,31 @@
+# HTTPS front door for a single-server GymOps install (used by docker-compose.prod.yml).
+# Caddy gets and renews a free Let's Encrypt certificate for {$DOMAIN} automatically. Requirements:
+#   * the domain's DNS "A" record points to this server's public IP address,
+#   * ports 80 and 443 are open to the internet (nothing else needs to be).
+# Everything is passed to the nginx container, which routes /api, /analytics and the web app as it does locally.
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# Caddy adds X-Forwarded-For / X-Forwarded-Proto; nginx trusts them only from this container's fixed address.
+	reverse_proxy nginx:80
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# Optional: send www.<domain> to the main address. Only enable it after adding a DNS record for www too,
+# otherwise Caddy keeps retrying a certificate it cannot get.
+# www.{$DOMAIN} {
+# 	redir https://{$DOMAIN}{uri} permanent
+# }

@@ -133,6 +133,8 @@ export interface Plan {
     accessStartTime: string | null;
     accessEndTime: string | null;
     maxVisitsPerMonth: number | null;
+    /** entries allowed per day (gate or desk); null = unlimited */
+    maxEntriesPerDay: number | null;
   };
   freezePolicy: { allowed: boolean; minDays: number; maxDays: number; maxCount: number };
   cancellation: { policy: CancellationPolicy; coolingOffDays: number; cancellationFee: number };

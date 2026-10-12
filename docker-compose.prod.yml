@@ -1,0 +1,70 @@
+# Production override for ONE cloud server (see docs/SETUP_GUIDE.md, "Publishing the website").
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Adds Caddy as the HTTPS front door on ports 80/443 (automatic Let's Encrypt certificates), takes the public port
+# away from nginx, switches demo data off and points links / CORS at https://$DOMAIN. Put DOMAIN and ACME_EMAIL in
+# .env next to the other settings. Requires Docker Compose v2.24+ (for !reset).
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  caddy:
+    image: caddy:2.8.4-alpine
+    <<: *restart
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env, e.g. DOMAIN=gym.example.com}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env (certificate expiry notices go there)}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"          # HTTP/3
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # certificates: keep this volume
+      - caddy_config:/config
+    networks:
+      default:
+        ipv4_address: 172.30.250.10   # nginx.conf trusts X-Forwarded-For only from this address
+    depends_on:
+      nginx: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { memory: 128m }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  nginx:
+    <<: *restart
+    ports: !reset []            # only Caddy is reachable from the internet
+
+  core-service:
+    <<: *restart
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,prod   # prod refuses to start without a strong ACCESS_MASTER_KEY
+      DEMO_DATA_ENABLED: "false"
+      PUBLIC_BASE_URL: https://${DOMAIN}
+      CORS_ALLOWED_ORIGINS: https://${DOMAIN}
+
+  analytics-service:
+    <<: *restart
+  web:
+    <<: *restart
+  postgres:
+    <<: *restart
+  redis:
+    <<: *restart
+  mailpit:
+    <<: *restart
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.250.0/24
+
+volumes:
+  caddy_data:
+  caddy_config:

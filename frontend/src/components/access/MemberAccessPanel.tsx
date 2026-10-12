@@ -16,6 +16,7 @@ import { QueryState } from '@/components/QueryState';
 import { StatusBadge } from '@/components/StatusBadge';
 import { dateTime, fromNow, label } from '@/lib/format';
 import { notifySuccess } from '@/lib/notify';
+import { useFeatures } from '@/lib/features';
 import { useApiMutation, useApiQuery } from '@/lib/useApi';
 
 const ICONS: Record<CredentialType, typeof IconId> = {
@@ -27,9 +28,10 @@ const ICONS: Record<CredentialType, typeof IconId> = {
  * (RFID card, fingerprint / face via a device enrolment command, QR pass), and the member's gate events.
  */
 export function MemberAccessPanel({ memberId }: { memberId: number }) {
+  const { biometrics } = useFeatures();
   return (
     <Stack gap="md">
-      <ConsentCard memberId={memberId} />
+      {biometrics && <ConsentCard memberId={memberId} />}
       <CredentialsCard memberId={memberId} />
       <EventsCard memberId={memberId} />
     </Stack>
@@ -177,6 +179,7 @@ function CredentialsCard({ memberId }: { memberId: number }) {
     invalidate: ['/api/v1/access'],
     successMessage: 'Entry pass re-issued',
   });
+  const { biometrics } = useFeatures();
   const list = creds.data ?? [];
   const qrRevokedOnly = list.some((c) => c.type === 'QR') && !list.some((c) => c.type === 'QR' && c.status !== 'REVOKED');
   return (
@@ -185,9 +188,11 @@ function CredentialsCard({ memberId }: { memberId: number }) {
         <Title order={5}>Credentials</Title>
         <Group gap="xs">
           <Button size="xs" variant="light" leftSection={<IconId size={14} />} onClick={() => setCardOpen(true)}>Register card</Button>
-          <Button size="xs" variant="light" leftSection={<IconFingerprint size={14} />} onClick={() => setBioOpen(true)}>
-            Enrol fingerprint / face
-          </Button>
+          {biometrics && (
+            <Button size="xs" variant="light" leftSection={<IconFingerprint size={14} />} onClick={() => setBioOpen(true)}>
+              Enrol fingerprint / face
+            </Button>
+          )}
           {qrRevokedOnly && (
             <Button size="xs" variant="light" leftSection={<IconQrcode size={14} />} loading={issueQr.isPending}
               onClick={() => issueQr.mutate()}>Re-issue QR pass</Button>

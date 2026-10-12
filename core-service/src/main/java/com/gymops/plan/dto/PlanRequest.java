@@ -39,7 +39,9 @@ public record PlanRequest(
         // group classes per calendar month: null = unlimited, 0 = no classes
         @Min(0) @Max(100) Integer classCreditsPerMonth,
         // recorded in the plan's price history when this edit changes the price or joining fee
-        @Size(max = 500) String priceChangeReason) {
+        @Size(max = 500) String priceChangeReason,
+        // entries allowed per day (gate or desk): null = unlimited
+        @Min(1) @Max(20) Integer maxEntriesPerDay) {
 
     @AssertTrue(message = "customDurationDays is required for CUSTOM plans and not allowed otherwise")
     public boolean isDurationValid() {

@@ -135,6 +135,7 @@ public class PlanService {
         plan.setAccessStartTime(r.accessStartTime());
         plan.setAccessEndTime(r.accessEndTime());
         plan.setMaxVisitsPerMonth(r.maxVisitsPerMonth());
+        plan.setMaxEntriesPerDay(r.maxEntriesPerDay());
         plan.setClassCreditsPerMonth(r.classCreditsPerMonth());
         plan.setFreezeAllowed(r.freezeAllowed());
         plan.setMinFreezeDays(r.freezeAllowed() ? r.minFreezeDays() : 0);

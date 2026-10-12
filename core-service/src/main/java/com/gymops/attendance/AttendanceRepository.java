@@ -30,6 +30,9 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
             """)
     long countMemberVisitsBetween(@Param("memberId") Long memberId, @Param("from") Instant from, @Param("to") Instant to);
 
+    @Query("select a.id from Attendance a where a.branch.id = :branchId and a.checkOutTime is null and a.checkInTime < :cutoff")
+    java.util.List<Long> findOpenIdsAtBranchBefore(@Param("branchId") Long branchId, @Param("cutoff") Instant cutoff);
+
     long countByMemberId(Long memberId);
 
     @Query("""

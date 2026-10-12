@@ -1,0 +1,70 @@
+{
+  "_comment": "Copy to gate_bridge.json and edit. Keys starting with _ are notes. NEVER put the device secret in this file: set the environment variable named in device_secret_env (or point device_secret_file to a file only this user can read).",
+
+  "server_url": "https://gym.example.com",
+  "device_id": "gd_REPLACE_WITH_THE_DEVICE_ID",
+  "device_secret_env": "GATE_DEVICE_SECRET",
+  "device_secret_file": null,
+
+  "_direction": "ENTRY or EXIT for a one-way reader; null = the direction set on the device in GymOps (BOTH devices default to ENTRY).",
+  "direction": "ENTRY",
+
+  "_state_dir": "Cached signed allowlist + offline event buffer live here. Keep it on persistent storage.",
+  "state_dir": "gate-bridge-state",
+
+  "request_timeout_seconds": 4,
+  "scan_retries": 1,
+  "heartbeat_seconds": 60,
+  "commands_poll_seconds": 15,
+  "allowlist_refresh_seconds": 3600,
+  "upload_interval_seconds": 30,
+  "default_open_seconds": 5,
+
+  "_inputs": "Any of: keyboard (USB card/QR reader typing into this console), http (fingerprint terminal / vendor middleware), exit-button (USB push button that sends Enter). keyboard and exit-button both use the console, pick one.",
+  "inputs": ["keyboard", "http"],
+
+  "keyboard": {
+    "qr_prefix": "GQ1.",
+    "fingerprint_prefix": "FP:",
+    "face_prefix": "FACE:",
+    "exit_keyword": "EXIT",
+    "_card_format": "hex (reader types A1B2C3D4) or decimal (reader types 0002712847); GymOps stores the hex UID.",
+    "card_format": "hex",
+    "reverse_card_bytes": false,
+    "direction": null
+  },
+
+  "http": {
+    "_bind": "127.0.0.1 = only programs on this computer can call it. If the fingerprint terminal calls from the LAN, use 0.0.0.0 AND set the token variable.",
+    "bind": "127.0.0.1",
+    "port": 8765,
+    "token_env": "GATE_BRIDGE_HTTP_TOKEN",
+    "_drive_relay": "true = the bridge opens the relay itself; false = only return the decision (the terminal drives its own relay).",
+    "drive_relay": true
+  },
+
+  "_relay": "type print (just log), command (run a program; arguments list, no shell), http (call a network relay board), none. Placeholders: {seconds} {decision} {reason} {direction}.",
+  "relay": {
+    "type": "print",
+    "_example_command": {"type": "command", "command": ["usbrelay", "HURTM_1=1"], "close_command": ["usbrelay", "HURTM_1=0"]},
+    "_example_http": {"type": "http", "method": "GET", "url": "http://192.168.1.50/relay/0?turn=on&timer={seconds}"}
+  },
+
+  "_deny_signal": "Optional red LED / beep when access is DENIED. Same shape as relay; type none to switch off.",
+  "deny_signal": {"type": "print"},
+
+  "offline": {
+    "enabled": true,
+    "open_seconds": 5,
+    "_allow_unknown_exit": "Let anyone with a card out while offline (never trap people inside).",
+    "allow_unknown_exit": true,
+    "exit_button_opens": true
+  },
+
+  "commands": {
+    "_forward_url": "Optional: POST each enrolment / delete command (JSON) to the fingerprint vendor's middleware. null = only log them.",
+    "forward_url": null
+  },
+
+  "log_level": "INFO"
+}

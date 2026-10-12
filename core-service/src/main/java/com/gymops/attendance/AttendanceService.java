@@ -28,6 +28,7 @@ import com.gymops.subscription.MembershipQueryService;
 import com.gymops.subscription.Subscription;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -176,7 +177,9 @@ public class AttendanceService {
     @Transactional(propagation = Propagation.MANDATORY)
     public Attendance recordExit(Attendance visit, Instant at) {
         visit.checkOut(at);
-        return visit;
+        // flush now: a new visit inserted right after (re-entry) must not collide with this one on the
+        // "one open visit per member" index, and Hibernate would otherwise flush the insert first
+        return repository.saveAndFlush(visit);
     }
 
     @Transactional
@@ -207,6 +210,25 @@ public class AttendanceService {
         audit.record(AuditEvent.of("ATTENDANCE", attendanceId, "AUTO_CHECKED_OUT").member(visit.getMember().getId())
                 .branch(visit.getBranch().getId()));
         events.publishEvent(new DomainEvents.VisitAutoClosed(attendanceId, visit.getMember().getId()));
+        return true;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> openVisitIdsBefore(Long branchId, Instant cutoff) {
+        return repository.findOpenIdsAtBranchBefore(branchId, cutoff);
+    }
+
+    /**
+     * Ends a visit at a free-exit (push-button) branch, where nobody scans out: checked out {@code assumed} after
+     * entry. Unlike {@link #autoCheckOut} this is the normal case there, so the member is not notified.
+     */
+    @Transactional
+    public boolean closeAssumedVisit(Long attendanceId, Duration assumed) {
+        Attendance visit = repository.findById(attendanceId).orElse(null);
+        if (visit == null || !visit.isOpen()) {
+            return false;
+        }
+        visit.autoCheckOut(assumed);
         return true;
     }
 
@@ -264,6 +286,14 @@ public class AttendanceService {
         if (!plan.isAccessibleAt(local.toLocalTime())) {
             return EntryCheck.denied(EntryDenial.OUTSIDE_PLAN_HOURS, "Plan " + plan.getCode()
                     + " allows entry only between " + plan.getAccessStartTime() + " and " + plan.getAccessEndTime());
+        }
+        if (plan.getMaxEntriesPerDay() != null) {
+            ZonedDateTime dayStart = local.toLocalDate().atStartOfDay(branch.zone());
+            long today = repository.countMemberVisitsBetween(memberId, dayStart.toInstant(), dayStart.plusDays(1).toInstant());
+            if (today >= plan.getMaxEntriesPerDay()) {
+                return EntryCheck.denied(EntryDenial.DAILY_ENTRY_LIMIT, "Daily entry limit of " + plan.getMaxEntriesPerDay()
+                        + (plan.getMaxEntriesPerDay() == 1 ? " entry" : " entries") + " reached for today");
+            }
         }
         if (plan.getMaxVisitsPerMonth() != null) {
             ZonedDateTime monthStart = local.toLocalDate().withDayOfMonth(1).atStartOfDay(branch.zone());

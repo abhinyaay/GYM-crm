@@ -1,5 +1,6 @@
 package com.gymops.access;
 
+import com.gymops.settings.FeatureService;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -15,12 +16,17 @@ import org.springframework.stereotype.Component;
 public class AccessJobs {
 
     private final DeviceMonitorService monitor;
+    private final BranchAccessSettingsService branchSettings;
+    private final FeatureService features;
     private final ReplayGuard replayGuard;
     private final Clock clock;
 
     @Scheduled(fixedDelayString = "${app.access.monitor-interval:PT1M}", initialDelayString = "PT1M")
     @SchedulerLock(name = "access-device-monitor", lockAtMostFor = "PT5M")
     public void monitorHeartbeats() {
+        if (!features.gatesEnabled()) {
+            return;   // gates switched off: no offline alerts
+        }
         int flagged = 0;
         for (Long id : monitor.silentDevices()) {
             try {
@@ -33,6 +39,19 @@ public class AccessJobs {
         }
         if (flagged > 0) {
             log.info("access_devices_flagged_offline count={}", flagged);
+        }
+    }
+
+    /** Free-exit branches: nobody scans out, so visits are ended the configured time after entry. */
+    @Scheduled(fixedDelayString = "PT10M", initialDelayString = "PT3M")
+    @SchedulerLock(name = "access-button-exit-visits", lockAtMostFor = "PT10M")
+    public void closeButtonExitVisits() {
+        if (!features.gatesEnabled()) {
+            return;
+        }
+        int closed = branchSettings.closeUnexitedVisits();
+        if (closed > 0) {
+            log.info("access_button_exit_visits_closed count={}", closed);
         }
     }
 

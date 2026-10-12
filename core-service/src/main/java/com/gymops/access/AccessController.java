@@ -62,6 +62,7 @@ public class AccessController {
     private static final String MEMBER = "hasRole('MEMBER')";
     private static final Set<String> EVENT_SORT = Set.of("occurredAt", "id");
 
+    private final BranchAccessSettingsService branchSettings;
     private final DeviceService deviceService;
     private final CredentialService credentialService;
     private final ConsentService consentService;
@@ -69,6 +70,21 @@ public class AccessController {
     private final QrPassService qrPassService;
 
     // ------------------------------------------------------------------ devices
+
+    @Operation(summary = "Gate settings per branch (exit mode: BUTTON = free exit, VERIFIED = scan to exit)")
+    @GetMapping("/branches/settings")
+    @PreAuthorize(DESK)
+    public List<BranchAccessSettingsService.BranchAccessSettings> branchSettings() {
+        return branchSettings.list();
+    }
+
+    @Operation(summary = "Choose how members leave a branch: exit button (only entry verified) or scan to exit")
+    @PutMapping("/branches/{branchId}/settings")
+    @PreAuthorize(MANAGERS)
+    public BranchAccessSettingsService.BranchAccessSettings updateBranchSettings(
+            @PathVariable Long branchId, @Valid @RequestBody BranchAccessSettingsService.UpdateRequest request) {
+        return branchSettings.update(branchId, request);
+    }
 
     @Operation(summary = "Gate devices visible to the caller (branch-scoped)")
     @GetMapping("/devices")

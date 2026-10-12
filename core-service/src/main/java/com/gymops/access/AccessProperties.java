@@ -23,6 +23,9 @@ import org.springframework.validation.annotation.Validated;
  * @param heartbeatTimeout      a device silent for longer is flagged offline (managers notified once per outage)
  * @param gateOpenSeconds       how long the gate should stay unlocked after a GRANTED decision
  * @param monitorInterval       how often the heartbeat monitor runs
+ * @param defaultExitMode       exit mode of branches without their own setting: BUTTON (free exit, only entry is
+ *                              verified) or VERIFIED (scan to exit, anti-passback)
+ * @param buttonExitVisitLength in BUTTON mode nobody scans out, so open visits are closed this long after entry
  */
 @Validated
 @ConfigurationProperties(prefix = "app.access")
@@ -37,5 +40,7 @@ public record AccessProperties(
         @DefaultValue("24") @Min(1) @Max(168) int offlineAllowlistHours,
         @DefaultValue("5m") @NotNull Duration heartbeatTimeout,
         @DefaultValue("5") @Min(1) @Max(60) int gateOpenSeconds,
-        @DefaultValue("1m") @NotNull Duration monitorInterval) {
+        @DefaultValue("1m") @NotNull Duration monitorInterval,
+        @DefaultValue("BUTTON") @NotNull ExitMode defaultExitMode,
+        @DefaultValue("2h") @NotNull Duration buttonExitVisitLength) {
 }

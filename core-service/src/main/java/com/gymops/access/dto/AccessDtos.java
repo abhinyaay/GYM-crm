@@ -18,6 +18,7 @@ import com.gymops.access.DeviceDirection;
 import com.gymops.access.DeviceStatus;
 import com.gymops.access.DeviceType;
 import com.gymops.access.Direction;
+import com.gymops.access.ExitMode;
 import com.gymops.access.SuspensionSource;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
@@ -235,8 +236,15 @@ public final class AccessDtos {
                                    @Min(0) @Max(1_000_000) Integer offlineQueueDepth, @Size(max = 20) String doorState) {
     }
 
+    /** @param exitMode BUTTON = free exit (only entry is verified); VERIFIED = members scan to exit */
     public record HeartbeatResponse(Instant serverTime, DeviceStatus deviceStatus, long pendingCommands,
-                                    int allowlistRefreshSeconds) {
+                                    int allowlistRefreshSeconds, ExitMode exitMode) {
+    }
+
+    /** A push-button / free exit (no credential). {@code occurredAt} only for presses buffered while offline. */
+    public record ExitButtonRequest(
+            @NotBlank @Size(max = 80) @Pattern(regexp = "[A-Za-z0-9._:-]+") String deviceEventId,
+            Instant occurredAt) {
     }
 
     public record GateCommand(Long id, CommandType type, CredentialType credentialType, String templateRef,
@@ -279,6 +287,6 @@ public final class AccessDtos {
 
     public record Allowlist(String deviceId, Long branchId, String branchCode, String timezone, Instant generatedAt,
                             Instant validUntil, String hashScheme, List<AllowlistHours> openingHours,
-                            List<AllowlistEntry> entries, String notes) {
+                            List<AllowlistEntry> entries, String notes, ExitMode exitMode) {
     }
 }
