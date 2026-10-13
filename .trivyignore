@@ -1,0 +1,11 @@
+# Reviewed vulnerability exceptions for the CI image scan. Each entry needs a reason and an expiry date;
+# after the date the scan fails again and the exception must be re-reviewed.
+#
+# Spring Framework 6.2.19 is the last open-source 6.2.x release; these are fixed only in Spring Framework 7
+# (Spring Boot 4). GymOps does not use the affected features, so they are not exploitable here:
+#   - CVE-2026-47884: RCE via path handling in XsltView. No XSLT views (no XsltView/XsltViewResolver in the code).
+#   - CVE-2026-47890: stream corruption in Server-Sent Events with view rendering. No SSE endpoints or
+#     SseEmitter/ResponseBodyEmitter in the code.
+# Follow-up: migrate to Spring Boot 4 / Spring Framework 7 (tracked in docs/ROADMAP.md).
+CVE-2026-47884 exp:2027-01-31
+CVE-2026-47890 exp:2027-01-31

@@ -100,6 +100,8 @@ The analytics service already scores churn risk with explainable reasons. Close 
 
 ## Tier 4: platform and engineering
 
+- **Upgrade to Spring Boot 4 / Spring Framework 7 (before 2027-01-31).** Spring Framework 6.2 no longer gets open-source fixes. Two CVEs fixed only in 7.x (XsltView RCE, SSE stream corruption) are suppressed in `.trivyignore` because GymOps does not use those features; the exceptions expire on 2027-01-31, after which CI fails until the upgrade is done.
+
 | Area | Improvement |
 |---|---|
 | **Security** | TOTP 2FA for staff; SSO (Google Workspace / Azure AD) for staff via OIDC; move the refresh token to an httpOnly cookie through a small BFF; RS256 + JWKS so analytics can only verify tokens; per-user API rate limits |
